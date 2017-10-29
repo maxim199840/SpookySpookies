@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Spookies</title>
+    <link href="style.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script async src="js/libs/brf/BRFv4_JS_trial.js"></script>
+</head>
+<body>
+
+<div role="banner" class="header">
+    <img src="ghostt.svg" id="logo">
+    <div id="name">
+        <span><b>S</b></span>pooky<span> <b>S</b></span>pookies
+    </div>
+    <div onclick="window.location.href='pie.html';" id="pie"></div>
+</div>
+
+
+<div class="wrapper">
+    <div id="camera">
+        <video id="_webcam" style="display: none;"></video>
+        <div id="end"></div>
+        <canvas id="_imageData"></canvas>
+    </div>
+
+    <div id="p_prldr">
+        <div class="contpre">
+            <span class="svg_anm">
+                <i class="fa fa-spinner fa-pulse fa-3x fa-fw"></i>
+            </span>
+        </div>
+    </div>
+</div>
+<script type="text/javascript">
+	$(window).on('load', function() {
+		var $preloader = $('#p_prldr');
+		window.preloader = $preloader;
+	});
+</script>
+
+<script>
+
+	function initExample() {
+
+		var webcam = document.getElementById('_webcam');		// our webcam video
+		var imageData = document.getElementById('_imageData');	// image data for BRFv4
+		var ghostsImages = ['ghost.svg', 'black-cat.svg', 'jack.svg', 'pumpkin.svg', 'three-bats.svg'].map(addImg);
+		var ghosts = [];
+		var brfManager = null;
+		var resolution = null;
+		var brfv4 = null;
+		var faces = [];
+		var health = 3;
+		var score = 0;
+
+		function addImg(itemUrl) {
+			var img = new Image;
+			img.src = itemUrl;
+			return img;
+		}
+
+		function getRandom(min, max) {
+			return Math.floor(Math.random() * (max - min) + min);
+		}
+
+		function addGhost() {
+			var ghost = {
+				img: getRandom(0, ghostsImages.length - 1),
+				height: 50,
+				width: 50,
+				x: getRandom(imageData.width * 0.1, imageData.width - imageData.width * 0.1),
+				y: -50,
+				dx: 0,
+				dy: 5,
+			};
+			ghosts.push(ghost);
+		}
+
+		function mainLoop() {
+			if (getRandom(0, 101) > 97) addGhost();
+			ghosts = ghosts.filter(
+				function(ghost) {
+					/*					ghost.height = 50;
+                     ghost.width = 50;*/
+					ghost.x += 0;
+					ghost.y += ghost.dy;
+					if (faces.length && ghost.y > faces[0].refRect.height - 25) {
+						if (intersects({
+
+								x: ghost.x,
+								y: ghost.y,
+							}, {
+								x: faces[0].refRect.x + faces[0].refRect.height / 2,
+								y: faces[0].refRect.y + faces[0].refRect.width / 2,
+							})) {
+							health--;
+							return false;
+						}
+					}
+					if (ghost.dx === 0 && ghost.dy === 0 && ghost.width > faces[0].refRect.height) {
+						ghost.dx = ghost.x - imageData.width / 2;
+						ghost.dy = ghost.y - imageData.height / 2;
+						var sum = (Math.abs(ghost.dx) + Math.abs(ghost.dy)) / 10;
+						ghost.dx /= sum;
+						ghost.dy /= sum;
+						console.log(ghost);
+					}
+					if (!(ghost.y - 25 > imageData.height)) {
+						return true;
+					}
+					else if (faces[0].refRect.width > 10) score++;
+				},
+			);
+
+			if (health > 0) {
+				setTimeout(mainLoop, 25);
+			} else {
+				// Создание надписи Game Over после проиграша
+				var deleteCanvas = document.getElementById('_imageData');
+				deleteCanvas.remove();
+				var newCanvas = document.createElement('div');
+				newCanvas.className = 'endBlock';
+				end.appendChild(newCanvas);
+				newCanvas.style.width = '640px';
+				newCanvas.style.height = '480px';
+				newCanvas.style.backgroundImage = 'url(\'endBlock.jpg\')';
+				newCanvas.style.backgroundPosition = 'center';
+			}
+
+		}
+
+		function start() {
+			if (faces[0].refRect.width > 10) mainLoop();
+			else setTimeout(start, 100);
+		}
+
+		startCamera();
+
+		function startCamera() {
+
+			// Start video playback once the camera was fetched.
+			function onStreamFetched(mediaStream) {
+
+				webcam.srcObject = mediaStream;
+				webcam.play();
+
+				// Check whether we know the video dimensions yet, if so, start BRFv4.
+				function onStreamDimensionsAvailable() {
+
+					if (webcam.videoWidth === 0) {
+						setTimeout(onStreamDimensionsAvailable, 100);
+					} else {
+						waitForSDK();
+					}
+				}
+
+				onStreamDimensionsAvailable();
+			}
+
+			window.navigator.mediaDevices.getUserMedia({video: {width: 640, height: 480, frameRate: 120}}).
+				then(onStreamFetched).
+				catch(function() {
+					alert('No camera available.');
+				});
+		}
+
+		function waitForSDK() {
+
+			if (brfv4 === null) {
+				brfv4 = {
+					locateFile: function() {
+						return 'js/libs/brf/BRFv4_JS_trial.js.mem';
+					},
+				};
+				initializeBRF(brfv4);
+			}
+
+			if (brfv4.sdkReady) {
+				initSDK();
+			} else {
+				setTimeout(waitForSDK, 100);
+			}
+		}
+
+		function initSDK() {
+
+			// Resize the canvas to match the webcam video size.
+			imageData.width = webcam.videoWidth;
+			imageData.height = webcam.videoHeight;
+			resolution = new brfv4.Rectangle(0, 0, imageData.width, imageData.height);
+			var _faceDetectionRoi = new brfv4.Rectangle();
+			brfManager = new brfv4.BRFManager();
+			brfManager.init(resolution, resolution, 'com.tastenkunst.brfv4.js.examples.minimal.webcam');
+
+			// Check launch app
+			preloader.fadeOut('fast');
+
+			drawEverything();
+			start();
+		}
+
+		function intersects(point1, point2) {
+			return Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2)) <
+				faces[0].refRect.width / 2 + 25;
+		}
+
+		function drawEverything() {
+			var imageDataCtx = imageData.getContext('2d');
+			imageDataCtx.setTransform(-1.0, 0, 0, 1, resolution.width, 0); // mirrored for draw of video
+			imageDataCtx.drawImage(webcam, 0, 0, resolution.width, resolution.height);
+			imageDataCtx.setTransform(1.0, 0, 0, 1, 0, 0); // unmirrored for draw of results
+			brfManager.update(imageDataCtx.getImageData(0, 0, resolution.width, resolution.height).data);
+			faces = brfManager.getFaces();
+			var img = new Image;
+			img.src = 'ghost.svg';
+			ghosts.forEach(
+				function(ghost) {
+					imageDataCtx.drawImage(ghostsImages[ghost.img], ghost.x - ghost.width / 2, ghost.y - ghost.height /
+						2,
+						ghost.width, ghost.height);
+				},
+			);
+
+			var heartImg = addImg('heart.png');
+			imageDataCtx.font = '40px Georgia';
+			imageDataCtx.fillText('' + score, 10, 30);
+			for (var i = 0; i < health; i++) {
+				imageDataCtx.drawImage(heartImg, imageData.width - 10 - 35 * (i + 1), 10, 30, 30);
+			}
+
+			if (health > 0) requestAnimationFrame(drawEverything);
+		}
+
+	}
+
+	window.onload = initExample;
+
+</script>
+</body>
+</html>

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Бабушкины пирожочки</title>
+    <link href="styleB.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script async src="js/libs/brf/BRFv4_JS_trial.js"></script>
+</head>
+<body>
+<div role="banner" class="header">
+    <img src="pie.svg" id="logo">
+    <div id="name">
+        <span><b>S</b></span>pooky<span> <b>S</b></span>pookies
+    </div>
+    <div onclick="window.location.href='index.html';" id="ghost"></div>
+</div>
+
+
+<div class="wrapper">
+    <div id="camera">
+        <video id="_webcam" style="display: none;"></video>
+        <div id="end"></div>
+        <canvas id="_imageData"></canvas>
+    </div>
+
+</div>
+<div id="p_prldr">
+    <div class="contpre">
+            <span class="svg_anm">
+                <i class="fa fa-spinner fa-pulse fa-3x fa-fw"></i>
+            </span>
+    </div>
+</div>
+</div>
+<script type="text/javascript">
+	$(window).on('load', function() {
+		var $preloader = $('#p_prldr');
+		window.preloader = $preloader;
+	});
+</script>
+<script>
+	function startGame() {
+		var webcam = document.getElementById('_webcam');
+		var imageData = document.getElementById('_imageData');
+		var brfManager = null;
+		var resolution = null;
+		var brfv4 = null;
+
+		function onStreamFetched(mediaStream) {
+			webcam.srcObject = mediaStream;
+			webcam.play();
+
+			function onStreamDimensionsAvailable() {
+
+				if (webcam.videoWidth === 0) {
+					setTimeout(onStreamDimensionsAvailable, 100);
+				} else {
+					function waitForSDK() {
+						if (brfv4 === null) {
+							brfv4 = {
+								locateFile: function() {
+									return 'js/libs/brf/BRFv4_JS_trial.js.mem';
+								},
+							};
+							initializeBRF(brfv4);
+						}
+						if (brfv4.sdkReady) {
+							imageData.width = webcam.videoWidth;
+							imageData.height = webcam.videoHeight;
+							resolution =
+								new brfv4.Rectangle(0, 0, imageData.width, imageData.height);
+							brfManager = new brfv4.BRFManager();
+							brfManager.init(resolution, resolution,
+								'com.tastenkunst.brfv4.js.examples.minimal.webcam');
+							brfManager.setNumFacesToTrack(1);
+							trackFaces();
+
+							// Check launch app
+							preloader.fadeOut('fast');
+
+							setTimeout(gameLoop, 2000);
+						} else {
+							setTimeout(waitForSDK, 100);
+						}
+					}
+
+					waitForSDK();
+				}
+			}
+
+			onStreamDimensionsAvailable();
+		}
+
+		window.navigator.mediaDevices.getUserMedia({
+			video: {
+				width: 640,
+				height: 480,
+				frameRate: 120,
+			},
+		}).then(onStreamFetched).catch(function() {
+			alert('No camera available.');
+		});
+		var pieImg = new Image();
+		pieImg.src = 'pie.png';
+		var pies = [];
+		var piePartImg = new Image();
+		piePartImg.src = 'pie-parts.png';
+		var pieParts = [];
+		var mouthCenter = {
+			x: 0,
+			y: 0,
+		};
+		var lipsMarginCheckIndices = [[122, 134], [124, 132], [126, 130]];
+		var isMouthOpened = false;
+		var isNewMouthClosedEvent = false;
+		var difficulty = 95;
+		var dDifficulty = -0.05;
+		var hp = 100;
+		var dhp = -0.02;
+		var ddhp = -0.005;
+
+		function getRandom(min, max) {
+			return Math.floor(Math.random() * (max - min) + min);
+		}
+
+		function launchPie() {
+			pies.push({
+				x: getRandom(imageData.width * 0.3, imageData.width * 0.7),
+				y: imageData.height,
+				dx: getRandom(-5, 5),
+				dy: getRandom(-30, -15),
+				ddy: 0.06 * getRandom(20, 30),
+				degree: getRandom(0, 355),
+				dDegree: getRandom(-20, 20),
+			});
+		}
+
+		function spawnPieParts(x, y, dx) {
+			pieParts.push({
+				x: x,
+				y: y,
+				dy: -15,
+				ddy: 5,
+				dx: dx,
+			});
+		}
+
+		function gameLoop() {
+			if (hp <= 0) {
+				// Создание надписи Game Over после проиграша
+				var deleteCanvas = document.getElementById('_imageData');
+				deleteCanvas.remove();
+				var newCanvas = document.createElement('div');
+				newCanvas.className = 'endBlock';
+				end.appendChild(newCanvas);
+				newCanvas.style.width = '640px';
+				newCanvas.style.height = '480px';
+				newCanvas.style.backgroundImage = 'url(\'endBlock.jpg\')';
+				newCanvas.style.backgroundPosition = 'center';
+				return;
+			}
+			setTimeout(gameLoop, 20);
+			pies = pies.filter(function(pie) {
+				return pie.y <= imageData.height;
+			});
+			if (isNewMouthClosedEvent) {
+				pies = pies.filter(function(pie) {
+					if (Math.sqrt(Math.pow(pie.x - mouthCenter.x, 2) +
+							Math.pow(pie.y - mouthCenter.y, 2)) < 90) {
+						spawnPieParts(pie.x, pie.y, pie.dx);
+						hp += 10;
+						if (hp > 100) {
+							hp = 100;
+						}
+						return false;
+					}
+					return true;
+				});
+				isNewMouthClosedEvent = false;
+			}
+			pies = pies.map(function(pie) {
+				pie.x += pie.dx;
+				pie.y += pie.dy;
+				pie.dy += pie.ddy;
+				pie.degree += pie.dDegree;
+				return pie;
+			});
+			pieParts = pieParts.filter(function(piePart) {
+				return piePart.y <= imageData.height;
+			});
+			pieParts = pieParts.map(function(piePart) {
+				piePart.y += piePart.dy;
+				piePart.dy += piePart.ddy;
+				piePart.x += piePart.dx;
+				return piePart;
+			});
+			if (getRandom(0, 100) > difficulty) {
+				launchPie();
+			}
+			hp += dhp;
+			dhp += ddhp;
+			difficulty += dDifficulty;
+		}
+
+		function trackFaces() {
+
+			var imageDataCtx = imageData.getContext('2d');
+
+			imageDataCtx.setTransform(-1.0, 0, 0, 1, resolution.width, 0);
+			imageDataCtx.drawImage(webcam, 0, 0, resolution.width, resolution.height);
+			imageDataCtx.setTransform(1.0, 0, 0, 1, 0, 0);
+
+			brfManager.update(imageDataCtx.getImageData(0, 0, resolution.width,
+				resolution.height).data);
+
+			var face = brfManager.getFaces()[0];
+
+			if (face.state === brfv4.BRFState.FACE_TRACKING_START ||
+				face.state === brfv4.BRFState.FACE_TRACKING) {
+
+				var lipsMargin = 0;
+				mouthCenter =
+
+					{
+						x: 0,
+						y: 0,
+					};
+				lipsMarginCheckIndices.forEach(function(edge) {
+					lipsMargin +=
+						Math.sqrt(Math.pow(face.vertices[edge[0]] - face.vertices[edge[1]],
+							2) + Math.pow(face.vertices[edge[0] + 1] -
+							face.vertices[edge[1] + 1], 2));
+					mouthCenter.x += (face.vertices[edge[0]] + face.vertices[edge[1]]) / 2;
+					mouthCenter.y +=
+						(face.vertices[edge[0] + 1] + face.vertices[edge[1] + 1]) / 2;
+				});
+				lipsMargin /= lipsMarginCheckIndices.length;
+				if (!isMouthOpened && lipsMargin > face.refRect.height * 0.05) {
+					isMouthOpened = true;
+					console.log('mouth opened');
+				} else if (isMouthOpened && lipsMargin < face.refRect.height * 0.04) {
+					isMouthOpened = false;
+					isNewMouthClosedEvent = true;
+					console.log('mouth closed');
+				}
+				mouthCenter.x /= lipsMarginCheckIndices.length;
+				mouthCenter.y /= lipsMarginCheckIndices.length;
+			}
+			pies.forEach(function(pie) {
+				imageDataCtx.save();
+				imageDataCtx.translate(pie.x - 50, pie.y - 30);
+				imageDataCtx.rotate(pie.degree * Math.PI / 180);
+				imageDataCtx.drawImage(pieImg, -50, -30, 100, 60);
+				imageDataCtx.restore();
+			});
+			pieParts.forEach(function(piePart) {
+				imageDataCtx.drawImage(piePartImg, piePart.x - 50, piePart.y - 30, 100,
+					60);
+			});
+			imageDataCtx.beginPath();
+			imageDataCtx.fillStyle = '#b40000';
+			imageDataCtx.fillRect(0, 0, imageData.width * hp / 100, 20);
+			imageDataCtx.stroke();
+			requestAnimationFrame(trackFaces);
+		}
+	}
+
+	window.onload = startGame;
+
+</script>
+</body>
+</html>
